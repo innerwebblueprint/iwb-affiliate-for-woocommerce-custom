@@ -4,7 +4,7 @@
  * Plugin Name: IWB affiliate for woocommerce custom
  * Plugin URI: 
  * Description: Custom code for affiliate for woocommerce
- * Version: 1.2
+ * Version: 1.2.1
  * Author: 
  * License: 
  * License URI: 
@@ -79,7 +79,7 @@ function iwb_add_self_referral_commission($order_id)
 
     // Check if a commission for this order already exists
     $existing_referral = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$table_name} WHERE order_id = %d AND affiliate_id = %d",
+        "SELECT COUNT(*) FROM {$table_name} WHERE post_id = %d AND affiliate_id = %d",
         $order_id,
         $customer_id
     ));
@@ -124,10 +124,12 @@ function iwb_add_self_referral_commission($order_id)
     // Prepare the data for the new commission.
     $referral_data = [
         'affiliate_id' => $customer_id,
-        'order_id'     => $order_id,
+        'post_id'      => $order_id, // Use post_id as the order ID
+        'datetime'     => current_time('mysql'),
         'amount'       => $commission_amount,
+        'currency_id'  => 'USD', // Adjust if dynamic currencies are supported
         'status'       => 'unpaid', // Adjust status as necessary
-        'date'         => current_time('mysql'),
+        'type'         => 'self-referral', // Optional, adjust as per your use case
     ];
 
     // Insert the referral into the database.
