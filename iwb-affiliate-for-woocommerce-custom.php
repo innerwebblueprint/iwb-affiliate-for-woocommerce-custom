@@ -4,7 +4,7 @@
  * Plugin Name: IWB affiliate for woocommerce custom
  * Plugin URI: 
  * Description: Custom code for affiliate for woocommerce
- * Version: 1.2.1
+ * Version: 1.2.2
  * Author: 
  * License: 
  * License URI: 
@@ -135,16 +135,18 @@ function iwb_add_self_referral_commission($order_id)
     // Insert the referral into the database.
     $result = $wpdb->insert($table_name, $referral_data);
 
-    if ($result !== false) {
+    if ($result === false) {
+        error_log("Failed to add self-referral commission for Affiliate ID {$customer_id}. Error: {$wpdb->last_error}");
+        error_log("Query: " . $wpdb->last_query);
+        error_log("Data: " . print_r($referral_data, true));
+        $order->add_order_note(
+            "Failed to add self-referral commission for Affiliate ID {$customer_id}."
+        );
+    } else {
         $order->add_order_note(
             "Self-referral commission added for Affiliate ID {$customer_id}. Amount: $commission_amount."
         );
         error_log("Self-referral commission added for Affiliate ID {$customer_id}. Amount: $commission_amount.");
-    } else {
-        $order->add_order_note(
-            "Failed to add self-referral commission for Affiliate ID {$customer_id}."
-        );
-        error_log("Failed to add self-referral commission for Affiliate ID {$customer_id}. Error: {$wpdb->last_error}");
     }
 }
 
