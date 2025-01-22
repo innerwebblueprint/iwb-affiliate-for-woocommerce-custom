@@ -4,7 +4,7 @@
  * Plugin Name: IWB affiliate for woocommerce custom
  * Plugin URI: 
  * Description: Custom code for affiliate for woocommerce
- * Version: 1.2.2
+ * Version: a1.2.3
  * Author: 
  * License: 
  * License URI: 
@@ -129,7 +129,7 @@ function iwb_add_self_referral_commission($order_id)
         'amount'       => $commission_amount,
         'currency_id'  => 'USD', // Adjust if dynamic currencies are supported
         'status'       => 'unpaid', // Adjust status as necessary
-        'type'         => 'self-referral', // Optional, adjust as per your use case
+        'type'         => 'selfref', // Optional, adjust as per your use case
     ];
 
     // Insert the referral into the database.
