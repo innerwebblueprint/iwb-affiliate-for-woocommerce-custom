@@ -4,7 +4,7 @@
  * Plugin Name: IWB affiliate for woocommerce custom
  * Plugin URI: 
  * Description: Custom code for affiliate for woocommerce
- * Version: a1.2.3
+ * Version: 1.2.4
  * Author: 
  * License: 
  * License URI: 
@@ -17,7 +17,7 @@ add_action('woocommerce_order_status_changed', 'iwb_handle_order_status_change',
 
 function iwb_handle_order_status_change($order_id, $old_status, $new_status)
 {
-    // Only act on pending payment orders to handle before payment processing.
+    // Only act on pending status (before payment processing).
     if ($new_status !== 'pending') {
         return;
     }
@@ -34,11 +34,11 @@ function iwb_handle_order_status_change($order_id, $old_status, $new_status)
         return;
     }
 
-    // Step 1: Assign affiliate tag based on product purchase.
-    iwb_assign_tag_on_order($order);
-
-    // Step 2: Set referring affiliate as parent affiliate.
+    // Step 1: Set referring affiliate as parent affiliate.
     iwb_set_referring_affiliate_as_parent($order, $customer_id);
+
+    // Step 2: Assign new customer affiliate tag based on product purchase.
+    iwb_assign_tag_on_order($order);
 }
 
 
@@ -151,7 +151,7 @@ function iwb_add_self_referral_commission($order_id)
 }
 
 /**
- * Assign a tag to the customer affiliate based on the purchased product.
+ * Assign a tag to the new customer affiliate based on purchased product.
  *
  * @param WC_Order $order The WooCommerce order.
  */
@@ -168,33 +168,18 @@ function iwb_assign_tag_on_order($order)
 
         if ($product) {
             $tag = 'product-' . sanitize_title($product->get_slug());
-            iwb_assign_affiliate_tag($customer_id, $tag);
+            error_log("Will assign tag: '{$tag}' to affiliate ID {$customer_id}.");
+
+            $result = wp_set_object_terms($customer_id, $tag, 'afwc_user_tags', true);
+
+            if (is_wp_error($result)) {
+                error_log("Failed to assign tag '{$tag}' to affiliate ID {$customer_id}. Error: " . $result->get_error_message());
+            } else {
+                $order->add_order_note(
+                    "Successfully assigned tag '{$tag}' to new affiliate ID {$customer_id}."
+                );
+            }
         }
-    }
-}
-
-/**
- * Assign a tag to an affiliate.
- *
- * @param int    $user_id   The user ID of the affiliate.
- * @param string $tag       The tag to assign.
- */
-function iwb_assign_affiliate_tag($user_id, $tag)
-{
-    if (empty($user_id) || !is_int($user_id)) {
-        return;
-    }
-
-    if ('yes' !== afwc_is_user_affiliate($user_id)) {
-        return;
-    }
-
-    $result = wp_set_object_terms($user_id, $tag, 'afwc_user_tags', true);
-
-    if (is_wp_error($result)) {
-        error_log("Failed to assign tag '{$tag}' to affiliate ID {$user_id}. Error: " . $result->get_error_message());
-    } else {
-        error_log("Successfully assigned tag '{$tag}' to affiliate ID {$user_id}.");
     }
 }
 
