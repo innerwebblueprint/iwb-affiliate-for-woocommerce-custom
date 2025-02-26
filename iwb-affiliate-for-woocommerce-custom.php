@@ -1,56 +1,35 @@
 <?php
 
 /**
- * Plugin Name: IWB affiliate for woocommerce custom
- * Plugin URI: 
- * Description: Custom code for affiliate for woocommerce
+ * Plugin Name: IWB Affiliate for Woocommerce customizations
+ * Plugin URI: https://innerwebblueprint.com/iwb-affiliate-for-woocommerce-custom
+ * Description: Custom code for affiliate for woocommerce: 
  * Version: 1.2.4
- * Author: 
- * License: 
- * License URI: 
+ * Author: IWB
+ * License: MIT
+ * License URI:  
  */
 
-// iwb-affiliate-for-woocommerce-custom
-
-// Hook into WooCommerce order status change.
-add_action('woocommerce_order_status_changed', 'iwb_handle_order_status_change', 10, 3);
-
-function iwb_handle_order_status_change($order_id, $old_status, $new_status)
-{
-    // Only act on pending status (before payment processing).
-    if ($new_status !== 'pending') {
-        return;
-    }
-
-    $order = wc_get_order($order_id);
-    if (!$order) {
-        error_log("Order ID {$order_id} not found.");
-        return;
-    }
-
-    $customer_id = $order->get_customer_id();
-    if (empty($customer_id)) {
-        error_log("No customer found for Order ID {$order_id}.");
-        return;
-    }
-
-    // Step 1: Set referring affiliate as parent affiliate.
-    iwb_set_referring_affiliate_as_parent($order, $customer_id);
-
-    // Step 2: Assign new customer affiliate tag based on product purchase.
-    iwb_assign_tag_on_order($order);
-}
+/** This plugin does 3 things:
+ * 
+ *  1.  Assign an affiliate tag to a customer based on the product purchased. 
+ *  2.  Assign a new affiliates 'parent affiliate' (because I am not using regular the regular signup method. Purchasing specific producets creates an 'affiliate'.)
+ *  3.  Add a self-referral comission.
+ */
 
 
-// Hook into the WooCommerce order status change to add self-referral commissions
-add_action('woocommerce_order_status_completed', 'iwb_add_self_referral_commission');
+// Hook into the WooCommerce order completed hook to perform some customizations
+add_action('woocommerce_order_status_completed', 'iwb_affiliate_order_completed_customizations');
 
 /**
- * Add self-referral commission for an affiliate when their order is completed.
- *
+ * function iwb_affiliate_order_completed_customizations($order_id)
+ *  1.  Assign an affiliate tag to a customer based on the product purchased. 
+ *  2.  Assign a new affiliates 'parent affiliate' (because I am not using regular the regular signup method. Purchasing specific producets creates an 'affiliate'.)
+ *  3.  Add a self-referral comission.
+ * 
  * @param int $order_id The WooCommerce order ID.
  */
-function iwb_add_self_referral_commission($order_id)
+function iwb_affiliate_order_completed_customizations($order_id)
 {
     global $wpdb;
 
@@ -146,8 +125,14 @@ function iwb_add_self_referral_commission($order_id)
         $order->add_order_note(
             "Self-referral commission added for Affiliate ID {$customer_id}. Amount: $commission_amount."
         );
-        error_log("Self-referral commission added for Affiliate ID {$customer_id}. Amount: $commission_amount.");
+        //error_log("Self-referral commission added for Affiliate ID {$customer_id}. Amount: $commission_amount.");
     }
+
+    // call the set tag based on product ordered function
+    iwb_assign_tag_on_order($order);
+
+    // call the set the parent affiliate functioin
+    iwb_set_referring_affiliate_as_parent($order, $customer_id);
 }
 
 /**
@@ -168,7 +153,7 @@ function iwb_assign_tag_on_order($order)
 
         if ($product) {
             $tag = 'product-' . sanitize_title($product->get_slug());
-            error_log("Will assign tag: '{$tag}' to affiliate ID {$customer_id}.");
+            //error_log("Will assign tag: '{$tag}' to affiliate ID {$customer_id}.");
 
             $result = wp_set_object_terms($customer_id, $tag, 'afwc_user_tags', true);
 
@@ -192,41 +177,53 @@ function iwb_assign_tag_on_order($order)
 function iwb_set_referring_affiliate_as_parent($order, $customer_id)
 {
     // Get referring affiliate ID from the order.
+    $order_id = $order->get_id();
     $afwc_api = AFWC_API::get_instance();
-    $affiliate_data = $afwc_api->get_affiliate_by_order($order->get_id());
+    $affiliate_data = $afwc_api->get_affiliate_by_order($order_id);
 
-    if (empty($affiliate_data) || empty($affiliate_data['affiliate_id'])) {
+    //error_log("Affiliate Data: " . print_r($affiliate_data));
+    if (isset($affiliate_data['affiliate_id'])) {
+        $referring_affiliate_id = (int)$affiliate_data['affiliate_id'];
+
+        //error_log("Customer ID: $customer_id, Order ID: $order_id , Referring affiliate: {$referring_affiliate_id}");
+
+        // to remove if my tests works..
+        // // Get the current parent affiliate using the plugin's method.
+        // $affiliate = new AFWC_Affiliate($customer_id);
+        // $existing_parent_affiliate = $affiliate->get_parent_affiliate();
+
+        // // Log Current Parent affiliate
+        // error_log("Current parent affiliate: '{$existing_parent_affiliate}'");
+
+        // Check if customer has existing parent affilaite
+        $multi_tier = AFWC_Multi_Tier::get_instance();
+
+        // Current Parent affiliate
+        $pre_existing_parent_affiliate = $multi_tier->get_parents($customer_id);
+        //error_log("Current parent affiliate: " . print_r($pre_existing_parent_affiliate));
+
+        // Assign new parent affiliate
+        $multi_tier->assign_parent($customer_id, $referring_affiliate_id);
+        // $new_result = $multi_tier->assign_parent($customer_id, $referring_affiliate_id);
+        //error_log(" value of new_result: " . print_r($new_result, true));
+
+        // If not empty, we are going to override? Yes, we are:
+        if (!empty($pre_existing_parent_affiliate)) {
+            $order->add_order_note(
+                "Parent affiliate already exists for Customer ID {$customer_id} (Affiliate ID: " . print_r($pre_existing_parent_affiliate, true) . " Overwriting with new parent Affiliate ID {$referring_affiliate_id}."
+            );
+        }
+
+        $new_parent = $multi_tier->get_parents($customer_id);
+
+        //error_log("New parent affiliate: " . print_r($new_parent, true));
+
         $order->add_order_note(
-            "No referring affiliate found for this order. No parent affiliate set."
-        );
-        return;
-    }
-
-    $referring_affiliate_id = (int)$affiliate_data['affiliate_id'];
-
-    // Get the current parent affiliate using the plugin's method.
-    $affiliate = new AFWC_Affiliate($customer_id);
-    $existing_parent_affiliate = $affiliate->get_parent_affiliate();
-
-    if (!empty($existing_parent_affiliate)) {
-        $order->add_order_note(
-            "Parent affiliate already exists for Customer ID {$customer_id} (Affiliate ID: {$existing_parent_affiliate}). Overwriting with Affiliate ID {$referring_affiliate_id}."
-        );
-    }
-
-    // Assign the parent affiliate using the multi-tier class method.
-    $multi_tier = AFWC_Multi_Tier::get_instance();
-    $multi_tier->assign_parent($customer_id, $referring_affiliate_id);
-
-    // Validate if the parent was set correctly.
-    $new_parent_affiliate = $affiliate->get_parent_affiliate();
-    if ((int)$new_parent_affiliate === $referring_affiliate_id) {
-        $order->add_order_note(
-            "Parent affiliate successfully set for Customer ID {$customer_id} to Affiliate ID {$referring_affiliate_id}."
+            "Multi-Tier parent affiliate set for Customer ID {$customer_id} to Affiliate ID " . print_r($new_parent, true)
         );
     } else {
         $order->add_order_note(
-            "Failed to set Parent affiliate for Customer ID {$customer_id}. Expected: {$referring_affiliate_id}, Found: {$new_parent_affiliate}."
+            "No referring affiliate found for this order. No parent affiliate set."
         );
     }
 }
